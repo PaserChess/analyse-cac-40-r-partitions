@@ -6,29 +6,29 @@ from scipy.optimize import minimize
 import math
 import itertools
 
-# --- NOUVEAU : Import XGBoost avec gestion d'erreur ---
+# --- NEW: Import XGBoost with error handling ---
 try:
     import xgboost as xgb
-    print("✅ XGBoost détecté : Mode Turbo activé.")
+    print("XGBoost detected: Turbo Mode activated.")
     HAS_XGBOOST = True
 except ImportError:
-    print("⚠️ XGBoost non installé. Installation recommandée via 'pip install xgboost'.")
-    print("👉 Fallback sur RandomForest (Scikit-Learn) pour l'instant.")
+    print("XGBoost not installed. Recommended installation via 'pip install xgboost'.")
+    print("Fallback to RandomForest (Scikit-Learn) for now.")
     from sklearn.ensemble import RandomForestRegressor
     HAS_XGBOOST = False
 
-# --- 1. PARAMÈTRES --- meilleur : cap à 0.24 et min à 0.15
-SEUIL_FILTRE = 0.15    # Filtre Conviction
-WINDOW_YEARS = 3.5      # Fenêtre d'apprentissage
+# --- 1. PARAMETERS --- best: cap at 0.24 and min at 0.15
+SEUIL_FILTRE = 0.15     # Conviction Filter
+WINDOW_YEARS = 3.5      # Learning Window
 CONFIDENCE_LEVEL = 0.95 # VaR 95%
-TARGET_BUDGET = 1000   
-RISK_AVERSION = 2.5     # Standard pour les actions (Delta)
-tau = 4               # Incertitude sur le Prior (Standard BL)
+TARGET_BUDGET = 1000    
+RISK_AVERSION = 2.5     # Standard for stocks (Delta)
+tau = 4                 # Uncertainty on Prior (Standard BL)
 RISK_FREE_RATE = 0.025
 
-print(f"1. CONFIG : BL + SIM + ML (XGBoost/RF) | Budget ~{TARGET_BUDGET}€")
+print(f"1. CONFIG : BL + SIM + ML (XGBoost/RF) | Budget ~{TARGET_BUDGET} EUR")
 
-# --- 2. DONNÉES HISTORIQUES ---
+# --- 2. HISTORICAL DATA ---
 raw_history = {
     2010: ['AC.PA', 'AI.PA', 'AIR.PA','STLAP.PA', 'MT.AS', 'CS.PA', 'BNP.PA', 'EN.PA', 'CAP.PA', 'CA.PA', 'ACA.PA', 'BN.PA', 'ENGI.PA', 'EL.PA', 'KER.PA', 'OR.PA', 'MMB.PA', 'MC.PA', 'ML.PA', 'ORA.PA', 'RI.PA', 'PUB.PA', 'RNO.PA', 'SGO.PA', 'SAN.PA', 'SU.PA', 'GLE.PA', 'STMPA.PA', 'TTE.PA', 'URW.AS', 'VK.PA', 'VIE.PA', 'DG.PA', 'VIV.PA'],
     2011: ['AC.PA', 'AI.PA', 'AIR.PA','STLAP.PA', 'MT.AS', 'CS.PA', 'BNP.PA', 'EN.PA', 'CAP.PA', 'CA.PA', 'ACA.PA', 'BN.PA', 'ENGI.PA', 'EL.PA', 'KER.PA', 'OR.PA', 'MC.PA', 'ML.PA', 'KN.PA', 'ORA.PA', 'RI.PA', 'PUB.PA', 'RNO.PA', 'SGO.PA', 'SAN.PA', 'SU.PA', 'GLE.PA', 'STMPA.PA', 'TTE.PA', 'URW.AS', 'VK.PA', 'VIE.PA', 'DG.PA', 'VIV.PA'],
@@ -49,22 +49,22 @@ raw_history = {
     2026: ['AC.PA', 'AI.PA', 'AIR.PA', 'MT.AS', 'CS.PA', 'BNP.PA', 'EN.PA', 'BVI.PA', 'CAP.PA', 'CA.PA', 'ACA.PA', 'BN.PA', 'DSY.PA', 'FGR.PA', 'ENGI.PA', 'EL.PA', 'ERF.PA', 'ENX.PA', 'RMS.PA', 'KER.PA', 'OR.PA', 'LR.PA', 'MC.PA', 'ML.PA', 'ORA.PA', 'RI.PA', 'PUB.PA', 'RNO.PA', 'SAF.PA', 'SGO.PA', 'SAN.PA', 'SU.PA', 'GLE.PA', 'STLAP.PA', 'STMPA.PA', 'HO.PA', 'TTE.PA', 'URW.AS', 'VIE.PA', 'DG.PA']
 }
 all_tickers_ever = sorted(list(set([t for yr in raw_history.values() for t in yr] + ['^FCHI'])))
-print("2. TÉLÉCHARGEMENT DONNÉES...")
+print("2. DOWNLOADING DATA...")
 try:
     data = yf.download(all_tickers_ever, start="2005-01-01", auto_adjust=True)['Close'].ffill()
     prices_bench = data['^FCHI']
     last_date = data.index[-1]
-    print(f"   Données OK jusqu'au {last_date.date()}")
+    print(f"   Data OK until {last_date.date()}")
 except Exception as e:
-    print(f"Erreur Download: {e}")
+    print(f"Download Error: {e}")
     exit()
 
-# --- 3. FONCTIONS MATHÉMATIQUES ---
+# --- 3. MATHEMATICAL FUNCTIONS ---
 
 def get_covariance_sim(asset_returns, benchmark_returns):
     """
-    Calcule la matrice de covariance via le SINGLE-INDEX MODEL.
-    Cov = Beta * Beta' * Var(Market) + Diag(Residus)
+    Calculates the covariance matrix via the SINGLE-INDEX MODEL.
+    Cov = Beta * Beta' * Var(Market) + Diag(Residuals)
     """
     common_idx = asset_returns.index.intersection(benchmark_returns.index)
     if len(common_idx) < 10: return None 
@@ -89,29 +89,29 @@ def get_covariance_sim(asset_returns, benchmark_returns):
 
 def predict_returns_ml(prices):
     """
-    VERSION AMÉLIORÉE : Ajout de la distance à la moyenne mobile (Trend)
+    IMPROVED VERSION: Added distance to moving average (Trend)
     """
     returns = prices.pct_change().dropna()
     predicted_means = {}
     
     for ticker in returns.columns:
         s = returns[ticker].copy()
-        p = prices[ticker].copy() # On a besoin des prix pour les moyennes mobiles
+        p = prices[ticker].copy() # Need prices for moving averages
         
         df_ml = pd.DataFrame({'t': s})
         
-        # --- FEATURES ENGINEERING AMÉLIORÉ ---
-        # 1. Momentum court terme
+        # --- IMPROVED FEATURE ENGINEERING ---
+        # 1. Short-term Momentum
         df_ml['lag1'] = df_ml['t'].shift(1)       
         
-        # 2. Volatilité
+        # 2. Volatility
         df_ml['vol21'] = df_ml['t'].rolling(21).std().shift(1) 
         
-        # 3. TENDANCE (Distance Prix vs Moyenne Mobile 50 jours)
-        # Si > 0, l'action est en tendance haussière, le ML doit le savoir.
+        # 3. TREND (Distance Price vs 50-day Moving Average)
+        # If > 0, stock is in uptrend, ML needs to know.
         sma50 = p.rolling(window=50).mean()
         dist_sma = (p / sma50) - 1
-        # On aligne les index (car pct_change décale de 1)
+        # Align indexes (since pct_change shifts by 1)
         df_ml['dist_sma'] = dist_sma.reindex(df_ml.index).shift(1)
 
         df_ml = df_ml.dropna()
@@ -124,13 +124,13 @@ def predict_returns_ml(prices):
         y = df_ml['t']
         
         if HAS_XGBOOST:
-            # XGBoost un peu plus contraint pour éviter les folies
+            # XGBoost slightly constrained to avoid overfitting
             model = xgb.XGBRegressor(  
                 objective='reg:squarederror',
-                n_estimators=220,      # Un peu plus d'arbres
-                max_depth=6,          # Moins profond = Moins d'overfitting
-                learning_rate=0.035,   # Apprentissage plus doux
-                reg_alpha=0.4,        # Plus de régularisation L1
+                n_estimators=220,      # More trees
+                max_depth=6,          # Less depth = Less overfitting
+                learning_rate=0.035,   # Softer learning
+                reg_alpha=0.4,        # More L1 regularization
                 n_jobs=-1,
                 random_state=1
             )
@@ -139,7 +139,7 @@ def predict_returns_ml(prices):
             
         model.fit(X, y)
         
-        # Prédiction J+1
+        # Prediction J+1
         last_sma = prices[ticker].rolling(50).mean().iloc[-1]
         last_dist = (prices[ticker].iloc[-1] / last_sma) - 1
         
@@ -151,18 +151,18 @@ def predict_returns_ml(prices):
         
         pred_daily = model.predict(last_obs)[0]
         
-        # Annualisation
+        # Annualization
         pred_annual = pred_daily * 252
         hist_annual = s.mean() * 252
         
-        # 50/50 : On fait confiance au ML mais on garde l'historique en ancre
+        # 50/50: Trust ML but keep history as an anchor
         predicted_means[ticker] = (pred_annual * 0.5) + (hist_annual * 0.5)
 
     return pd.Series(predicted_means)
 
 def optimize_black_litterman(prices_train, tau=tau): 
     """
-    CORRECTION MAJEURE : Ajout de contraintes de poids max (Capping)
+    MAJOR FIX: Added max weight constraints (Capping)
     """
     valid = prices_train.dropna(axis=1, how='any')
     if valid.shape[1] < 2: return None
@@ -192,7 +192,7 @@ def optimize_black_litterman(prices_train, tau=tau):
     jitter = 1e-5 * np.eye(n_assets)
     cov_mat_safe = cov_mat_annual + jitter
     
-    # Calcul BL Classique (Identique à avant)
+    # Classic BL Calculation (Same as before)
     weights_eq = np.array([1/n_assets] * n_assets).reshape(-1, 1)
     pi = risk_aversion * cov_mat_safe.dot(weights_eq)
     Q = mu_historical.values.reshape(-1, 1)
@@ -214,9 +214,9 @@ def optimize_black_litterman(prices_train, tau=tau):
         if p_vol < 1e-6: return 0 
         return - (p_ret - RISK_FREE_RATE) / p_vol
 
-    # --- CHANGEMENT CRITIQUE ICI ---
-    # Contrainte : Pas plus de 25% sur une seule action (0.25)
-    # Cela force l'algo à prendre au moins 4 actions.
+    # --- CRITICAL CHANGE HERE ---
+    # Constraint: No more than 25% on a single stock (0.25)
+    # This forces the algo to pick at least 4 stocks.
     MAX_WEIGHT = 0.24 
     bounds = tuple((0.0, MAX_WEIGHT) for _ in range(n_assets))
     
@@ -236,7 +236,7 @@ def clean_portfolio(allocations, threshold):
 
 def calculate_risk_metrics(returns_series, confidence=0.95):
     """
-    Calcule la VaR et l'Expected Shortfall (CVaR).
+    Calculates VaR and Expected Shortfall (CVaR).
     """
     if returns_series.empty: return np.nan, np.nan
     
@@ -267,7 +267,7 @@ def run_scenario(scenario_id, name, start_year, end_year, use_filter):
     cap_bench = 100.0
     risk_audit = [] 
     
-    print(f"{'ANNÉE':<6} | {'BENCH':<8} | {'STRAT':<8} | {'VaR 95%':<8} | {'CVaR 95%':<9} | {'TOP POSITIONS':<30}")
+    print(f"{'YEAR':<6} | {'BENCH':<8} | {'STRAT':<8} | {'VaR 95%':<8} | {'CVaR 95%':<9} | {'TOP POSITIONS':<30}")
     print("-" * 120)
     
     for start_test, end_test in periods:
@@ -289,7 +289,7 @@ def run_scenario(scenario_id, name, start_year, end_year, use_filter):
         
         train_data = data.loc[start_train:end_train, valid_tickers]
         
-        # Optimisation
+        # Optimization
         alloc = optimize_black_litterman(train_data)
         
         if use_filter:
@@ -307,7 +307,7 @@ def run_scenario(scenario_id, name, start_year, end_year, use_filter):
             top3 = alloc.head(3)
             top_holdings_str = ", ".join([f"{t.replace('.PA','')} {w*100:.0f}%" for t, w in top3.items()])
             
-            # Calcul risques prévisionnels
+            # Forecast risk calculation
             train_prices_alloc = train_data[alloc.index]
             train_rets_alloc = train_prices_alloc.pct_change(fill_method=None).dropna()
             
@@ -351,7 +351,7 @@ def run_scenario(scenario_id, name, start_year, end_year, use_filter):
 
         per_bench_abs = per_bench
         per_strat_abs = per_strat if alloc is not None else 0
-        sign = "✅" if per_strat_abs > per_bench_abs else "🔻"
+        sign = "[+]" if per_strat_abs > per_bench_abs else "[-]"
         
         print(f"{start_test[:4]:<6} | {per_bench_abs*100:+.1f}%   | {per_strat_abs*100:+.1f}% {sign} | {var_forecast*100:.1f}%    | {cvar_forecast*100:.1f}%     | {top_holdings_str}")
         
@@ -367,20 +367,29 @@ def run_scenario(scenario_id, name, start_year, end_year, use_filter):
             
     for j in range(plot_idx, len(axs_flat)): fig.delaxes(axs_flat[j])
     fig.tight_layout(rect=[0, 0.03, 1, 0.95])
+    clean_name = name.replace(" ", "_").replace("|", "").replace("+", "").replace(">", "gt")
+    filename = f"chart_scenario_{scenario_id}_{clean_name}.png"
     
+    # Save the figure to the current directory
+    plt.savefig(filename, dpi=300, bbox_inches='tight')
+    print(f"   [+] Chart saved successfully: {filename}")
+    
+    # Close the figure to free memory (optional if you don't want them to pop up)
+    # plt.close(fig) 
+    # ---------------------------
     print("-" * 120)
-    print(f"BILAN : Stratégie {cap_strat:.0f} € vs Bench {cap_bench:.0f} €")
+    print(f"SUMMARY : Strategy {cap_strat:.0f} EUR vs Bench {cap_bench:.0f} EUR")
     
     if len(risk_audit) > 0:
-        print("\n>>> AUDIT DE RISQUE AVANCÉ (VaR vs CVaR)")
-        print(f"{'Année':<8} | {'VaR (Seuil)':<12} | {'CVaR (Crash)':<13} | {'Pire Jour':<12} | {'Analyse'}")
+        print("\n>>> ADVANCED RISK AUDIT (VaR vs CVaR)")
+        print(f"{'Year':<8} | {'VaR (Threshold)':<15} | {'CVaR (Crash)':<13} | {'Worst Day':<12} | {'Analysis'}")
         for r in risk_audit:
-            cvar_breach = "⚠️ >CVaR" if r['Real_Worst'] < r['Pred_CVaR'] else "OK"
-            print(f"{r['Period']:<8} | {r['Pred_VaR']*100:.2f}%      | {r['Pred_CVaR']*100:.2f}%       | {r['Real_Worst']*100:.2f}%      | {r['Status']} / {cvar_breach}")
+            cvar_breach = "[!] >CVaR" if r['Real_Worst'] < r['Pred_CVaR'] else "OK"
+            print(f"{r['Period']:<8} | {r['Pred_VaR']*100:.2f}%       | {r['Pred_CVaR']*100:.2f}%       | {r['Real_Worst']*100:.2f}%      | {r['Status']} / {cvar_breach}")
             
     print("=" * 120)
 
-# --- 5. OPTIMISEUR ENTIER ---
+# --- 5. FULL OPTIMIZER ---
 def smart_integer_optimizer(allocation, current_prices, target_budget):
     results = []
     tickers = allocation.index.tolist()
@@ -417,27 +426,27 @@ def smart_integer_optimizer(allocation, current_prices, target_budget):
     if not results: return None
     return sorted(results, key=lambda x: x["score"])[0]
 
-# --- 6. EXÉCUTION ---
+# --- 6. EXECUTION ---
 scenarios_list = [
-    {"id": 1, "years": (2011, 2020), "filter": True,  "desc": f"10 Ans | CONVICTION BL+SIM+XGBOOST (>12%)"},
-    {"id": 2, "years": (2021, 2025), "filter": True,  "desc": f"5 Ans  | CONVICTION BL+SIM+XGBOOST (>12%)"},
+    {"id": 1, "years": (2011, 2020), "filter": True,  "desc": f"10 Years | CONVICTION BL+SIM+XGBOOST (>12%)"},
+    {"id": 2, "years": (2021, 2025), "filter": True,  "desc": f"5 Years  | CONVICTION BL+SIM+XGBOOST (>12%)"},
 ]
 
-print("3. LANCEMENT DES SIMULATIONS...")
+print("3. LAUNCHING SIMULATIONS...")
 for s in scenarios_list:
     run_scenario(s["id"], s["desc"], s["years"][0], s["years"][1], s["filter"])
 
-# --- 7. PRÉVISIONS 2026 ---
-print("\n" + "█"*80)
-print(f"🔮 PRÉVISIONS 2026 : BLACK-LITTERMAN + SIM + XGBOOST (FINAL GOLD MASTER)")
-print("█"*80)
+# --- 7. FORECASTS 2026 ---
+print("\n" + "="*80)
+print(f"FORECAST 2026 : BLACK-LITTERMAN + SIM + XGBOOST (FINAL GOLD MASTER)")
+print("="*80)
 
 end_train_26 = last_date
 start_train_26 = last_date - pd.DateOffset(months=int(WINDOW_YEARS * 12))
 tickers_2026 = [t for t in raw_history[2026] if t in data.columns]
 train_data_26 = data.loc[start_train_26:end_train_26, tickers_2026]
 
-# Appel Optimiseur BL
+# BL Optimizer Call
 alloc_base = optimize_black_litterman(train_data_26)
 
 if alloc_base is not None:
@@ -446,40 +455,40 @@ if alloc_base is not None:
     
     if alloc_conviction is not None:
         
-        # --- DASHBOARD DE RISQUE 2026 ---
+        # --- RISK DASHBOARD 2026 ---
         train_prices_alloc = train_data_26[alloc_conviction.index]
         train_port_26 = train_prices_alloc.pct_change().dropna().dot(alloc_conviction.values)
         p_var_26, p_cvar_26 = calculate_risk_metrics(train_port_26, CONFIDENCE_LEVEL)
         p_vol_26 = train_port_26.std() * np.sqrt(252)
         p_ret_26 = train_port_26.mean() * 252
         
-        print("\n📊 DASHBOARD DE RISQUE (Estimé sur 3.5 ans)")
+        print("\nRISK DASHBOARD (Est. over 3.5 years)")
         print("-" * 50)
-        print(f"   Rendement Espéré (Hist) : {p_ret_26*100:.2f}%")
-        print(f"   Volatilité Annuelle     : {p_vol_26*100:.2f}%")
-        print(f"   Ratio de Sharpe (Est.)  : {(p_ret_26/p_vol_26):.2f}")
+        print(f"   Expected Return (Hist): {p_ret_26*100:.2f}%")
+        print(f"   Annual Volatility     : {p_vol_26*100:.2f}%")
+        print(f"   Sharpe Ratio (Est.)   : {(p_ret_26/p_vol_26):.2f}")
         print("-" * 50)
-        print(f"   VaR 95% (Jour)          : {p_var_26*100:.2f}%  (Seuil de perte)")
-        print(f"   CVaR 95% (Jour)         : {p_cvar_26*100:.2f}%  (Crash moyen)")
+        print(f"   VaR 95% (Daily)       : {p_var_26*100:.2f}%  (Loss threshold)")
+        print(f"   CVaR 95% (Daily)      : {p_cvar_26*100:.2f}%  (Avg Crash)")
         print("-" * 50)
         
-        print(f"\nA. PORTEFEUILLE THÉORIQUE")
+        print(f"\nA. THEORETICAL PORTFOLIO")
         print("-" * 75)
         for t, w in alloc_conviction.items():
             price = data[t].iloc[-1]
-            print(f"   👉 {t.replace('.PA',''):<10} | {w*100:.3f}%      | {budget*w:.0f} €          | {price:.2f} €")
+            print(f"   -> {t.replace('.PA',''):<10} | {w*100:.3f}%      | {budget*w:.0f} EUR          | {price:.2f} EUR")
     
         current_prices = data.iloc[-1][alloc_conviction.index]
         best_plan = smart_integer_optimizer(alloc_conviction, current_prices, TARGET_BUDGET)
         
-        print("\n" + "█"*80)
-        print(f"C. PLAN D'ACHAT OPTIMAL 2026 (Budget ~{TARGET_BUDGET}€)")
-        print("█"*80)
+        print("\n" + "="*80)
+        print(f"C. OPTIMAL BUYING PLAN 2026 (Budget ~{TARGET_BUDGET} EUR)")
+        print("="*80)
         
         if best_plan:
-            print(f"   Coût Total : {best_plan['cost']:.2f} €")
+            print(f"   Total Cost : {best_plan['cost']:.2f} EUR")
             print("-" * 80)
-            print(f"{'ACTION':<10} | {'PRIX UNIT.':<12} | {'QTÉ':<10} | {'MONTANT':<12} | {'POIDS'}")
+            print(f"{'STOCK':<10} | {'UNIT PRICE':<12} | {'QTY':<10} | {'AMOUNT':<12} | {'WEIGHT'}")
             print("-" * 80)
             
             tickers = alloc_conviction.index.tolist()
@@ -490,11 +499,11 @@ if alloc_base is not None:
                 p = current_prices[t]
                 amt = n * p
                 w_real = amt / best_plan['cost']
-                print(f"{t.replace('.PA',''):<10} | {p:<10.2f} € | {n:<10} | {amt:<10.0f} € | {w_real*100:.1f}%")
+                print(f"{t.replace('.PA',''):<10} | {p:<10.2f} EUR| {n:<10} | {amt:<10.0f} EUR| {w_real*100:.1f}%")
             print("-" * 80)
         else:
-            print("Budget trop serré pour les prix unitaires.")
+            print("Budget too tight for unit prices.")
 else:
-    print("Erreur données.")
+    print("Data Error.")
 
 plt.show()
