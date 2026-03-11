@@ -29,7 +29,7 @@ RISK_FREE_RATE = 0.025
 print(f"1. CONFIG : BL + SIM + ML (XGBoost/RF) | Budget ~{TARGET_BUDGET} EUR")
 
 # --- 2. HISTORICAL DATA ---
-"""
+
 raw_history = {
     2010: ['AC.PA', 'AI.PA', 'AIR.PA','STLAP.PA', 'MT.AS', 'CS.PA', 'BNP.PA', 'EN.PA', 'CAP.PA', 'CA.PA', 'ACA.PA', 'BN.PA', 'ENGI.PA', 'EL.PA', 'KER.PA', 'OR.PA', 'MMB.PA', 'MC.PA', 'ML.PA', 'ORA.PA', 'RI.PA', 'PUB.PA', 'RNO.PA', 'SGO.PA', 'SAN.PA', 'SU.PA', 'GLE.PA', 'STMPA.PA', 'TTE.PA', 'URW.AS', 'VK.PA', 'VIE.PA', 'DG.PA', 'VIV.PA'],
     2011: ['AC.PA', 'AI.PA', 'AIR.PA','STLAP.PA', 'MT.AS', 'CS.PA', 'BNP.PA', 'EN.PA', 'CAP.PA', 'CA.PA', 'ACA.PA', 'BN.PA', 'ENGI.PA', 'EL.PA', 'KER.PA', 'OR.PA', 'MC.PA', 'ML.PA', 'KN.PA', 'ORA.PA', 'RI.PA', 'PUB.PA', 'RNO.PA', 'SGO.PA', 'SAN.PA', 'SU.PA', 'GLE.PA', 'STMPA.PA', 'TTE.PA', 'URW.AS', 'VK.PA', 'VIE.PA', 'DG.PA', 'VIV.PA'],
@@ -69,6 +69,7 @@ raw_history = {
     2025: ['AC.PA', 'AI.PA', 'AIR.PA', 'MT.AS', 'CS.PA', 'BNP.PA', 'EN.PA', 'BVI.PA', 'CAP.PA', 'CA.PA', 'ACA.PA', 'BN.PA', 'DSY.PA', 'EDEN.PA', 'ENGI.PA', 'EL.PA', 'ERF.PA', 'RMS.PA', 'KER.PA', 'OR.PA', 'LR.PA', 'MC.PA', 'ML.PA', 'ORA.PA', 'RI.PA', 'PUB.PA', 'RNO.PA', 'SAF.PA', 'SGO.PA', 'SAN.PA', 'SU.PA', 'GLE.PA', 'STLAP.PA', 'STMPA.PA', 'TEP.PA', 'HO.PA', 'TTE.PA', 'URW.AS', 'VIE.PA', 'DG.PA'],
     2026: ['AC.PA', 'AI.PA', 'AIR.PA', 'MT.AS', 'CS.PA', 'BNP.PA', 'EN.PA', 'BVI.PA', 'CAP.PA', 'CA.PA', 'ACA.PA', 'BN.PA', 'DSY.PA', 'FGR.PA',  'EL.PA', 'ERF.PA', 'ENX.PA', 'RMS.PA','KER.PA', 'LR.PA', 'MC.PA', 'ML.PA', 'ORA.PA', 'RI.PA', 'PUB.PA', 'RNO.PA', 'SGO.PA', 'SAN.PA', 'SU.PA', 'GLE.PA', 'STLAP.PA', 'STMPA.PA', 'HO.PA', 'TTE.PA', 'URW.AS', 'VIE.PA', 'DG.PA']
 }
+"""
 all_tickers_ever = sorted(list(set([t for yr in raw_history.values() for t in yr] + ['^FCHI'])))
 print("2. DOWNLOADING DATA...")
 try:
@@ -83,7 +84,7 @@ except Exception as e:
 # --- 3. MATHEMATICAL FUNCTIONS ---
 
 def get_covariance_sim(asset_returns, benchmark_returns):
-    """
+    """   
     Calculates the covariance matrix via the SINGLE-INDEX MODEL.
     Cov = Beta * Beta' * Var(Market) + Diag(Residuals)
     """
