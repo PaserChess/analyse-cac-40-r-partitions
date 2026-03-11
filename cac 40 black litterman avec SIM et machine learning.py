@@ -18,7 +18,7 @@ except ImportError:
     HAS_XGBOOST = False
 
 # --- 1. PARAMETERS --- best: cap at 0.24 and min at 0.15
-SEUIL_FILTRE = 0.15     # Conviction Filter
+SEUIL_FILTRE = 0.11     # Conviction Filter
 WINDOW_YEARS = 3.5      # Learning Window
 CONFIDENCE_LEVEL = 0.95 # VaR 95%
 TARGET_BUDGET = 1000    
@@ -46,7 +46,7 @@ raw_history = {
     2023: ['AI.PA', 'AIR.PA', 'ALO.PA','STLAP.PA', 'MT.AS', 'CS.PA', 'BNP.PA', 'EN.PA', 'CAP.PA', 'CA.PA', 'ACA.PA', 'BN.PA', 'DSY.PA', 'ENGI.PA', 'EL.PA', 'ERF.PA', 'RMS.PA', 'KER.PA', 'OR.PA', 'LR.PA', 'MC.PA', 'ML.PA', 'ORA.PA', 'RI.PA', 'PUB.PA', 'RNO.PA', 'SAF.PA', 'SGO.PA', 'SAN.PA', 'SU.PA', 'GLE.PA', 'STLAP.PA', 'STMPA.PA', 'TEP.PA', 'HO.PA', 'TTE.PA', 'URW.AS', 'VIE.PA', 'DG.PA', 'VIV.PA', 'WLN.PA'],
     2024: ['AI.PA', 'AIR.PA', 'ALO.PA', 'MT.AS', 'CS.PA', 'BNP.PA', 'EN.PA', 'CAP.PA', 'CA.PA', 'ACA.PA', 'BN.PA', 'DSY.PA', 'EDEN.PA', 'ENGI.PA', 'EL.PA', 'ERF.PA', 'RMS.PA', 'KER.PA', 'OR.PA', 'LR.PA', 'MC.PA', 'ML.PA', 'ORA.PA', 'RI.PA', 'PUB.PA', 'RNO.PA', 'SAF.PA', 'SGO.PA', 'SAN.PA', 'SU.PA', 'GLE.PA', 'STLAP.PA', 'STMPA.PA', 'TEP.PA', 'HO.PA', 'TTE.PA', 'URW.AS', 'VIE.PA', 'DG.PA', 'VIV.PA'],
     2025: ['AC.PA', 'AI.PA', 'AIR.PA', 'MT.AS', 'CS.PA', 'BNP.PA', 'EN.PA', 'BVI.PA', 'CAP.PA', 'CA.PA', 'ACA.PA', 'BN.PA', 'DSY.PA', 'EDEN.PA', 'ENGI.PA', 'EL.PA', 'ERF.PA', 'RMS.PA', 'KER.PA', 'OR.PA', 'LR.PA', 'MC.PA', 'ML.PA', 'ORA.PA', 'RI.PA', 'PUB.PA', 'RNO.PA', 'SAF.PA', 'SGO.PA', 'SAN.PA', 'SU.PA', 'GLE.PA', 'STLAP.PA', 'STMPA.PA', 'TEP.PA', 'HO.PA', 'TTE.PA', 'URW.AS', 'VIE.PA', 'DG.PA'],
-    2026: ['AC.PA', 'AI.PA', 'AIR.PA', 'MT.AS', 'CS.PA', 'BNP.PA', 'EN.PA', 'BVI.PA', 'CAP.PA', 'CA.PA', 'ACA.PA', 'BN.PA', 'DSY.PA', 'FGR.PA', 'ENGI.PA', 'EL.PA', 'ERF.PA', 'ENX.PA', 'RMS.PA', 'KER.PA', 'OR.PA', 'LR.PA', 'MC.PA', 'ML.PA', 'ORA.PA', 'RI.PA', 'PUB.PA', 'RNO.PA', 'SAF.PA', 'SGO.PA', 'SAN.PA', 'SU.PA', 'GLE.PA', 'STLAP.PA', 'STMPA.PA', 'HO.PA', 'TTE.PA', 'URW.AS', 'VIE.PA', 'DG.PA']
+    2026: ['AC.PA', 'AI.PA', 'AIR.PA', 'MT.AS', 'CS.PA', 'BNP.PA', 'EN.PA', 'BVI.PA', 'CAP.PA', 'CA.PA', 'ACA.PA', 'BN.PA', 'DSY.PA', 'FGR.PA', 'ENGI.PA', 'EL.PA', 'ERF.PA', 'ENX.PA', 'RMS.PA','KER.PA', 'OR.PA', 'LR.PA', 'MC.PA', 'ML.PA', 'ORA.PA', 'RI.PA', 'PUB.PA', 'RNO.PA', 'SAF.PA', 'SGO.PA', 'SAN.PA', 'SU.PA', 'GLE.PA', 'STLAP.PA', 'STMPA.PA', 'HO.PA', 'TTE.PA', 'URW.AS', 'VIE.PA', 'DG.PA']
 }
 all_tickers_ever = sorted(list(set([t for yr in raw_history.values() for t in yr] + ['^FCHI'])))
 print("2. DOWNLOADING DATA...")
@@ -217,7 +217,7 @@ def optimize_black_litterman(prices_train, tau=tau):
     # --- CRITICAL CHANGE HERE ---
     # Constraint: No more than 25% on a single stock (0.25)
     # This forces the algo to pick at least 4 stocks.
-    MAX_WEIGHT = 0.24 
+    MAX_WEIGHT = 0.24
     bounds = tuple((0.0, MAX_WEIGHT) for _ in range(n_assets))
     
     cons = ({'type': 'eq', 'fun': lambda x: np.sum(x) - 1})
@@ -267,18 +267,22 @@ def run_scenario(scenario_id, name, start_year, end_year, use_filter):
     cap_bench = 100.0
     risk_audit = [] 
     
-    print(f"{'YEAR':<6} | {'BENCH':<8} | {'STRAT':<8} | {'VaR 95%':<8} | {'CVaR 95%':<9} | {'TOP POSITIONS':<30}")
+    print(f"{'START DATE':<10} | {'BENCH':<8} | {'STRAT':<8} | {'VaR 95%':<8} | {'CVaR 95%':<9} | {'TOP POSITIONS':<30}")
     print("-" * 120)
     
     for start_test, end_test in periods:
         bench_slice = prices_bench.loc[start_test:end_test]
         if bench_slice.empty: continue
         
+        # NOUVEAU : Récupère explicitement le vrai 1er jour de bourse de l'année
+        actual_start_dt = bench_slice.index[0]
+        
         b_rets = bench_slice.pct_change(fill_method=None).dropna()
         per_bench = (1 + b_rets).prod() - 1
         cap_bench *= (1 + per_bench)
         
-        test_start_dt = pd.Timestamp(start_test)
+        # NOUVEAU : On base la fenêtre d'apprentissage sur cette vraie date
+        test_start_dt = actual_start_dt
         start_train = test_start_dt - pd.DateOffset(months=int(WINDOW_YEARS * 12))
         end_train = test_start_dt - pd.DateOffset(days=1)
         
@@ -332,7 +336,7 @@ def run_scenario(scenario_id, name, start_year, end_year, use_filter):
                 year_start = int(start_test[:4])
                 if year_start >= 2021:
                     risk_audit.append({
-                        "Period": f"{start_test[:4]}",
+                        "Period": actual_start_dt.strftime('%Y-%m-%d'),
                         "Pred_VaR": var_forecast,
                         "Pred_CVaR": cvar_forecast,
                         "Real_Worst": worst_loss,
@@ -353,14 +357,15 @@ def run_scenario(scenario_id, name, start_year, end_year, use_filter):
         per_strat_abs = per_strat if alloc is not None else 0
         sign = "[+]" if per_strat_abs > per_bench_abs else "[-]"
         
-        print(f"{start_test[:4]:<6} | {per_bench_abs*100:+.1f}%   | {per_strat_abs*100:+.1f}% {sign} | {var_forecast*100:.1f}%    | {cvar_forecast*100:.1f}%     | {top_holdings_str}")
+        # Affichage avec la vraie date formatée
+        print(f"{actual_start_dt.strftime('%Y-%m-%d'):<10} | {per_bench_abs*100:+.1f}%   | {per_strat_abs*100:+.1f}% {sign} | {var_forecast*100:.1f}%    | {cvar_forecast*100:.1f}%     | {top_holdings_str}")
         
         if plot_idx < len(axs_flat) and len(period_strat_curve) > 0:
             ax = axs_flat[plot_idx]
             ax.plot(period_dates, period_strat_curve, color='blue', linewidth=1.5)
             ax.plot(period_dates, period_bench_curve, color='gray', linestyle='--', alpha=0.7)
             col_tit = 'blue' if per_strat_abs > per_bench_abs else 'black'
-            ax.set_title(f"{start_test[:4]} : {per_strat_abs*100:+.0f}% vs {per_bench_abs*100:+.0f}%", color=col_tit, fontsize=9, fontweight='bold')
+            ax.set_title(f"{actual_start_dt.strftime('%Y-%m-%d')} : {per_strat_abs*100:+.0f}% vs {per_bench_abs*100:+.0f}%", color=col_tit, fontsize=9, fontweight='bold')
             ax.xaxis.set_visible(False)
             ax.grid(True, alpha=0.3)
             plot_idx += 1
@@ -382,10 +387,10 @@ def run_scenario(scenario_id, name, start_year, end_year, use_filter):
     
     if len(risk_audit) > 0:
         print("\n>>> ADVANCED RISK AUDIT (VaR vs CVaR)")
-        print(f"{'Year':<8} | {'VaR (Threshold)':<15} | {'CVaR (Crash)':<13} | {'Worst Day':<12} | {'Analysis'}")
+        print(f"{'Date Init':<10} | {'VaR (Threshold)':<15} | {'CVaR (Crash)':<13} | {'Worst Day':<12} | {'Analysis'}")
         for r in risk_audit:
             cvar_breach = "[!] >CVaR" if r['Real_Worst'] < r['Pred_CVaR'] else "OK"
-            print(f"{r['Period']:<8} | {r['Pred_VaR']*100:.2f}%       | {r['Pred_CVaR']*100:.2f}%       | {r['Real_Worst']*100:.2f}%      | {r['Status']} / {cvar_breach}")
+            print(f"{r['Period']:<10} | {r['Pred_VaR']*100:.2f}%       | {r['Pred_CVaR']*100:.2f}%       | {r['Real_Worst']*100:.2f}%      | {r['Status']} / {cvar_breach}")
             
     print("=" * 120)
 
