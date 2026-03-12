@@ -73,7 +73,7 @@ raw_history = {
 all_tickers_ever = sorted(list(set([t for yr in raw_history.values() for t in yr] + ['^FCHI'])))
 print("2. DOWNLOADING DATA...")
 try:
-    data = yf.download(all_tickers_ever, start="2005-01-01", auto_adjust=True)['Close'].ffill()
+    data = yf.download(all_tickers_ever, start="2010-01-01", auto_adjust=True)['Close'].ffill()
     prices_bench = data['^FCHI']
     last_date = data.index[-1]
     print(f"   Data OK until {last_date.date()}")
@@ -275,9 +275,9 @@ def run_scenario(scenario_id, name, start_year, end_year, use_filter):
     current_year = start_year
     while current_year <= end_year:
         # Rebalancement tous les 3 mois
-        for m in [1, 4,7,10]:
+        for m in [1, 4,7, 10]:
             start_dt = pd.Timestamp(current_year, m, 1)
-            end_dt = start_dt + pd.DateOffset(months=2) - pd.Timedelta(days=1)
+            end_dt = start_dt + pd.DateOffset(months=3) - pd.Timedelta(days=1)
             periods.append((start_dt.strftime('%Y-%m-%d'), end_dt.strftime('%Y-%m-%d')))
         current_year += 1
             
