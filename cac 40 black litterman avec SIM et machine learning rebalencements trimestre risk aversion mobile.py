@@ -18,18 +18,19 @@ except ImportError:
     HAS_XGBOOST = False
 
 # --- 1. PARAMETERS --- best: cap at 0.24 and min at 0.15   
-SEUIL_FILTRE = 0.1    # Conviction Filter
+SEUIL_FILTRE = 0.15    # Conviction Filter
 WINDOW_YEARS = 3.5      # Learning Window
 CONFIDENCE_LEVEL = 0.95 # VaR 95%
 TARGET_BUDGET = 1000    
 RISK_AVERSION = 2.5     # Standard for stocks (Delta)
 tau = 4                 # Uncertainty on Prior (Standard BL)
 RISK_FREE_RATE = 0.025
+MAX_WEIGHT = 1 
+print(f"min : {SEUIL_FILTRE}, max : {MAX_WEIGHT}, tau : {tau}, risk aversion {RISK_AVERSION} ")
 
 # --- NEW: FRAIS DE COURTAGE ---
-FEE_RATE = 0.000 # 0.009        
+FEE_RATE = 0.0 # 0.009        
 print(f"1. CONFIG : BL + SIM + ML (XGBoost/RF) | Budget ~{TARGET_BUDGET} EUR | Frais PEA: {FEE_RATE*100}%")
-
 # --- 2. HISTORICAL DATA ---
 raw_history = {
     2010: ['AC.PA', 'AI.PA', 'AIR.PA','STLAP.PA', 'MT.AS', 'CS.PA', 'BNP.PA', 'EN.PA', 'CAP.PA', 'CA.PA', 'ACA.PA', 'BN.PA', 'ENGI.PA', 'EL.PA', 'KER.PA', 'OR.PA', 'MMB.PA', 'MC.PA', 'ML.PA', 'ORA.PA', 'RI.PA', 'PUB.PA', 'RNO.PA', 'SGO.PA', 'SAN.PA', 'SU.PA', 'GLE.PA', 'STMPA.PA', 'TTE.PA', 'URW.AS', 'VK.PA', 'VIE.PA', 'DG.PA', 'VIV.PA'],
@@ -156,14 +157,12 @@ def optimize_black_litterman(prices_train, tau=tau):
     
     if bench_rets.empty:
         cov_mat_annual = returns.cov() * 252
-        risk_aversion = 2.5
     else:
-        mkt_ret = bench_rets.mean() * 252
-        mkt_var = bench_rets.var() * 252
-        raw_lambda = (mkt_ret - RISK_FREE_RATE) / mkt_var 
-        risk_aversion = np.clip(raw_lambda, 1.0, 10.0)
         cov_mat_annual = get_covariance_sim(returns, bench_rets) * 252
         if cov_mat_annual is None: cov_mat_annual = returns.cov() * 252
+        
+    # On utilise ta variable globale définie en haut du script
+    risk_aversion = RISK_AVERSION
 
     mu_ml = predict_returns_ml(valid)
     mu_historical = mu_ml.loc[returns.columns]
@@ -187,19 +186,19 @@ def optimize_black_litterman(prices_train, tau=tau):
     except Exception:
         return None
     
-    def neg_sharpe_bl(w):
+    def neg_utility_bl(w):
         p_ret = np.sum(bl_returns * w)
-        p_vol = np.sqrt(np.dot(w.T, np.dot(cov_mat_safe, w))) 
-        if p_vol < 1e-6: return 0 
-        return - (p_ret - RISK_FREE_RATE) / p_vol
+        p_var = np.dot(w.T, np.dot(cov_mat_safe, w)) 
+        # On maximise l'utilité (rendement moins pénalité de risque)
+        return - (p_ret - (risk_aversion / 2) * p_var)
 
-    MAX_WEIGHT = 0.5 
     bounds = tuple((0.0, MAX_WEIGHT) for _ in range(n_assets))
     
     cons = ({'type': 'eq', 'fun': lambda x: np.sum(x) - 1})
     
     try:
-        res = minimize(neg_sharpe_bl, [1/n_assets]*n_assets, method='SLSQP', bounds=bounds, constraints=cons)
+        # L'optimiseur utilise maintenant la nouvelle fonction d'utilité !
+        res = minimize(neg_utility_bl, [1/n_assets]*n_assets, method='SLSQP', bounds=bounds, constraints=cons)
         return pd.Series(res.x, index=returns.columns).sort_values(ascending=False)
     except:
         return None
@@ -444,7 +443,6 @@ if alloc_base is not None:
         p_var_26, p_cvar_26 = calculate_risk_metrics(train_port_26, CONFIDENCE_LEVEL)
         p_vol_26 = train_port_26.std() * np.sqrt(252)
         p_ret_26 = train_port_26.mean() * 252
-        
         print("\nRISK DASHBOARD (Est. over 3.5 years)")
         print("-" * 50)
         print(f"   Expected Return (Hist): {p_ret_26*100:.2f}%")
